@@ -108,18 +108,19 @@ function cart.load_p8(filename)
 		for y = 0, 204 do
 			for x = 0, 159 do
 				local r, g, b, a = data:getPixel(x, y)
+				r = r / 255
 				-- extract lowest bits
-				r = bit.band(r, 0x0003)
-				g = bit.band(g, 0x0003)
-				b = bit.band(b, 0x0003)
-				a = bit.band(a, 0x0003)
+				r = bit.band(r * 255, 0x0003)
+				g = bit.band(g * 255, 0x0003)
+				b = bit.band(b * 255, 0x0003)
+				a = bit.band(a * 255, 0x0003)
 				data:setPixel(
 					x,
 					y,
-					bit.lshift(r, 6),
-					bit.lshift(g, 6),
-					bit.lshift(b, 6),
-					255
+					bit.lshift(r, 6) / 255,
+					bit.lshift(g, 6) / 255,
+					bit.lshift(b, 6) / 255,
+					1
 				)
 				local byte = bit.lshift(a, 6) + bit.lshift(r, 4) + bit.lshift(g, 2) + b
 				local lo = bit.band(byte, 0x0f)
@@ -287,7 +288,7 @@ function cart.load_p8(filename)
 				local col = 0
 				for v in line:gmatch(".") do
 					v = tonumber(v, 16)
-					pico8.spritesheet_data:setPixel(col, row, v * 16, v * 16, v * 16, 255)
+					pico8.spritesheet_data:setPixel(col, row, v * 16 / 255, v * 16 / 255, v * 16 / 255, 1)
 
 					col = col + 1
 					if col == 128 then

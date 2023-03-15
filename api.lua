@@ -1,3 +1,5 @@
+local utf8 = require("lib/utf8")
+
 local api = {}
 
 local flr = math.floor
@@ -119,7 +121,7 @@ function api.cls(col)
 	col = flr(tonumber(col) or 0) % 16
 	col = col + 1 -- TODO: fix workaround
 
-	love.graphics.clear(col * 16, 0, 0, 255)
+	love.graphics.clear(col * 16 / 256, 0, 0, 1)
 	pico8.cursor = {0, 0}
 end
 
@@ -409,6 +411,40 @@ local function tostring(str)
 	--return (tostring_org(str):gsub("[^%z\32-\127]", "8"))
 end
 
+local INPUT_GLYPHS = {
+	['8b'] = '⬅',
+	['91'] = '➡',
+	['94'] = '⬆',
+	['83'] = '⬇',
+	['97'] = '❎',
+	['8e'] = '🅾',
+}
+
+function api.strwidth(s)
+	local width = 0
+	for i = 1, utf8.len(s) do
+		local char = utf8.sub(s, i, i)
+		local isGlyph = false
+		for _, glyph in pairs(INPUT_GLYPHS) do
+			if char == glyph then
+				isGlyph = true
+				break
+			end
+		end
+
+		if isGlyph then
+			width = width + 8
+		else
+			width = width + 4
+		end
+
+		if i == #s then
+			width = width - 1
+		end
+	end
+	return width
+end
+
 function api.print(...)
 	--TODO: support printing special pico8 chars
 
@@ -453,10 +489,23 @@ function api.print(...)
 	end
 	local to_print = tostring(api.tostr(str))
 	love.graphics.setShader(pico8.text_shader)
-	love.graphics.print(to_print, flr(x), flr(y))
+
+	for textCode, glyph in pairs(INPUT_GLYPHS) do
+		to_print = to_print:gsub("QQ"..textCode, glyph)
+	end
+
+	love.graphics.print(string.lower(to_print), flr(x), flr(y))
 end
 
 api.printh = print
+
+function api.split(inputstr)
+	local t={}
+	for str in string.gmatch(inputstr, "([^,]+)") do
+		table.insert(t, str)
+	end
+	return t
+end
 
 function api.cursor(x, y, col)
 	if col then
@@ -577,6 +626,8 @@ function api.tostr(...)
 		return "[" .. kind .. "]"
 	end
 end
+
+api.tostring = api.tostr
 
 function api.spr(n, x, y, w, h, flip_x, flip_y)
 	love.graphics.setShader(pico8.sprite_shader)
@@ -888,7 +939,7 @@ end
 
 function api.map(cel_x, cel_y, sx, sy, cel_w, cel_h, bitmask)
 	love.graphics.setShader(pico8.sprite_shader)
-	love.graphics.setColor(255, 255, 255, 255)
+	love.graphics.setColor(1, 1, 1, 1)
 	cel_x = flr(cel_x or 0)
 	cel_y = flr(cel_y or 0)
 	sx = flr(sx or 0)
@@ -998,7 +1049,7 @@ function api.sset(x, y, c)
 	x = flr(tonumber(x) or 0)
 	y = flr(tonumber(y) or 0)
 	c = flr(tonumber(c) or 0)
-	pico8.spritesheet_data:setPixel(x, y, c * 16, 0, 0, 255)
+	pico8.spritesheet_data:setPixel(x, y, c * 16 / 256, 0, 0, 1)
 	pico8.spritesheet:refresh()
 end
 
@@ -1006,7 +1057,7 @@ function api.music(n, fade_len, channel_mask) -- luacheck: no unused
 	-- TODO: implement fade out
 	if n == -1 then
 		if pico8.current_music then
-			for i = 0, 3 do
+			for i = 0, AUDIO_CHANNELS_COUNT - 1 do
 				if pico8.music[pico8.current_music.music][i] < 64 then
 					pico8.audio_channels[i].sfx = nil
 					pico8.audio_channels[i].offset = 0
@@ -1024,7 +1075,7 @@ function api.music(n, fade_len, channel_mask) -- luacheck: no unused
 	end
 	local music_speed = nil
 	local music_channel = nil
-	for i = 0, 3 do
+	for i = 0, AUDIO_CHANNELS_COUNT - 1 do
 		if m[i] < 64 then
 			local sfx = pico8.sfx[m[i]]
 			if music_speed == nil or music_speed > sfx.speed then
@@ -1040,7 +1091,7 @@ function api.music(n, fade_len, channel_mask) -- luacheck: no unused
 		channel_mask = channel_mask or 15,
 		speed = music_speed
 	}
-	for i = 0, 3 do
+	for i = 0, AUDIO_CHANNELS_COUNT - 1 do
 		if pico8.music[n][i] < 64 then
 			pico8.audio_channels[i].sfx = pico8.music[n][i]
 			pico8.audio_channels[i].offset = 0
@@ -1062,7 +1113,7 @@ function api.sfx(n, channel, offset)
 	offset = offset or 0
 	if channel == -1 then
 		-- find a free channel
-		for i = 0, 3 do
+		for i = 0, AUDIO_CHANNELS_COUNT - 1 do
 			if pico8.audio_channels[i].sfx == nil then
 				channel = i
 			end

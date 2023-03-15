@@ -92,6 +92,12 @@ pico8 = {
 	spritesheet = nil
 }
 
+for _, color in pairs(pico8.palette) do
+	for i, colorComponent in pairs(color) do
+		color[i] = colorComponent / 255
+	end
+end
+
 local flr, abs = math.floor, math.abs
 
 loaded_code = nil
@@ -104,14 +110,14 @@ host_time = 0
 local paused = false
 local focus = true
 
-local __audio_channels
+local __audio_channels = {}
+AUDIO_CHANNELS_COUNT = 32
 local __sample_rate = 22050
 local channels = 1
 local bits = 16
 
 currentDirectory = "/"
-local glyphs =
-	'abcdefghijklmnopqrstuvwxyz"\'`-_/1234567890!?[](){}.,;:<>+=%#^*~ '
+local glyphs = 'abcdefghijklmnopqrstuvwxyz"\'`-_/1234567890!?[](){}.,;:<>+=%#^*~ ⬆⬇⬅➡🅾❎'
 
 local function _allow_pause(value)
 	if type(value) ~= "boolean" then
@@ -171,7 +177,7 @@ function restore_clip()
 end
 
 function setColor(c)
-	love.graphics.setColor(c * 16, 0, 0, 255)
+	love.graphics.setColor(c * 16 / 255, 0, 0, 1)
 end
 
 function _load(_cartname)
@@ -195,7 +201,7 @@ function _load(_cartname)
 
 	local file_found = false
 	for i = 1, #exts do
-		if love.filesystem.isFile(currentDirectory .. cart_no_ext .. exts[i]) then
+		if love.filesystem.getInfo(currentDirectory .. cart_no_ext .. exts[i]) then
 			file_found = true
 			_cartname = cart_no_ext .. exts[i]
 			break
@@ -292,18 +298,9 @@ function love.load(argv)
 		return x % 1
 	end
 
-	__audio_channels = {
-		[0] = QueueableSource:new(8),
-		QueueableSource:new(8),
-		QueueableSource:new(8),
-		QueueableSource:new(8)
-	}
-
-	for i = 0, 3 do
+	for i = 0, AUDIO_CHANNELS_COUNT - 1 do
+		__audio_channels[i] = QueueableSource:new(8)
 		__audio_channels[i]:play()
-	end
-
-	for i = 0, 3 do
 		pico8.audio_channels[i] = {
 			oscpos = 0,
 			noise = osc[6]()
@@ -391,7 +388,7 @@ extern vec4 palette[16];
 vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
 	int index = int(Texel(texture, texture_coords).r*15.0);
 	// lookup the color in the palette by index
-	return palette[index]/256.0;
+	return palette[index];
 }]]
 	)
 	pico8.display_shader:send("palette", shdr_unpack(pico8.display_palette))
@@ -593,12 +590,13 @@ end
 
 function flip_screen()
 	love.graphics.setShader(pico8.display_shader)
+	-- love.graphics.setShader()
 	pico8.display_shader:send("palette", shdr_unpack(pico8.display_palette))
 	love.graphics.setCanvas()
 	love.graphics.origin()
 	love.graphics.setScissor()
 
-	love.graphics.setBackgroundColor(3, 5, 10)
+	love.graphics.setBackgroundColor(3 / 255, 5 / 255, 10 / 255)
 	love.graphics.clear()
 
 	local screen_w, screen_h = love.graphics.getDimensions()
@@ -713,7 +711,7 @@ local function update_audio(time)
 		-- TODO: figure out what this was used for
 		--local music = pico8.current_music and pico8.music[pico8.current_music.music] or nil
 
-		for channel = 0, 3 do
+		for channel = 0, AUDIO_CHANNELS_COUNT - 1 do
 			local ch = pico8.audio_channels[channel]
 
 			if ch.bufferpos == 0 or ch.bufferpos == nil then
